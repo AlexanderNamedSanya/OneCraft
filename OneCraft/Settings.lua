@@ -69,17 +69,17 @@ function O.InitializeSettings()
             displayName = O.name, author = "oneDOK", registerForRefresh = true, registerForDefaults = true})
         LAM:RegisterOptionControls("OneCraftSettings", {{
             type = "checkbox",
-            name = O.isRussian and "Не подтверждать массовое создание" or "Skip multiple-item crafting confirmation",
+            name = O.isRussian and "Не подтверждать массовое создание" or O.Translate("Skip multiple-item crafting confirmation"),
             tooltip = O.isRussian and "Создавать несколько предметов в алхимии и зачаровании без дополнительного окна подтверждения."
-                or "Create multiple items at alchemy and enchanting stations without an additional confirmation dialog.",
+                or O.Translate("Create multiple items at alchemy and enchanting stations without an additional confirmation dialog."),
             getFunc = function() return O.settings.skipMultiCraftConfirmation end,
             setFunc = function(value) O.settings.skipMultiCraftConfirmation = value end,
             default = false,
         }, {
             type = "checkbox",
-            name = O.isRussian and "Материалы по убыванию уровня" or "Materials by descending level",
+            name = O.isRussian and "Материалы по убыванию уровня" or O.Translate("Materials by descending level"),
             tooltip = O.isRussian and "Сортировать списки материалов и уровней от высоких к низким во всех ремесленных станциях."
-                or "Sort material and level lists from highest to lowest at all crafting stations.",
+                or O.Translate("Sort material and level lists from highest to lowest at all crafting stations."),
             getFunc = function() return O.settings.descendingMaterialLevels end,
             setFunc = function(value)
                 O.settings.descendingMaterialLevels = value

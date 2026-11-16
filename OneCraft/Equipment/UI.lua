@@ -112,7 +112,7 @@ function P.FieldEntries(field)
     elseif field == "level" then
         add("L1", "1")
         for level = 4, 50, 2 do add("L" .. level, tostring(level)) end
-        for level = 10, 160, 10 do add("C" .. level, "CP " .. level) end
+        for level = 10, 160, 10 do add("C" .. level, string.format(O.Enchanting.text.cpFormat, level)) end
     elseif field == "enchant" then
         add(false, P.words.noEnchant)
         for _, effect in ipairs(O.Enchanting.effectList) do
@@ -156,12 +156,8 @@ function P.RefreshUI()
         local control, item = P.controls[key], P.SlotItem(key)
         local link = P.ItemLink(item)
         control.icon:SetTexture(link and GetItemLinkIcon(link) or control.emptyIcon)
-        control.icon:SetAlpha(item and 1 or 0.4)
+        control.icon:SetAlpha(1)
         control.selected:SetHidden(P.selected ~= P.OccupiedSlot(key))
-        if item then
-            local r, g, b = GetInterfaceColor(INTERFACE_COLOR_TYPE_ITEM_QUALITY_COLORS, item.quality)
-            control.border:SetColor(r, g, b, 1)
-        else control.border:SetColor(0.5, 0.5, 0.5, 0.6) end
     end
     for _, field in ipairs(P.fields) do
         local combo = P.combos[field]
@@ -218,13 +214,10 @@ local function createSlot(key, parent, native, x, y)
     c:SetDimensions(44, 44)
     c.icon = c:GetNamedChild("Icon")
     c.emptyIcon = native and ZO_Character_GetEmptyEquipSlotTexture(P.slotIds[key]) or O.noneTexture
-    c.border = W:CreateControl(nil, c, CT_TEXTURE)
-    c.border:SetAnchorFill()
-    c.border:SetTexture("EsoUI/Art/ActionBar/abilityFrame64_up.dds")
     c.selected = W:CreateControl(nil, c, CT_TEXTURE)
     c.selected:SetAnchorFill()
     c.selected:SetTexture("EsoUI/Art/ActionBar/actionBar_mouseOver.dds")
-    c.selected:SetColor(1, 0.8, 0.25, 1)
+    c.selected:SetColor(1, 1, 1, 1)
     c:SetHandler("OnMouseDown", function(_, mouseButton)
         if mouseButton == MOUSE_BUTTON_INDEX_LEFT then P.pressed = key end
     end)
@@ -235,6 +228,7 @@ local function createSlot(key, parent, native, x, y)
     c:SetHandler("OnDragStop", function() end)
     c:SetHandler("OnReceiveDrag", function() end)
     c:SetHandler("OnClicked", nil)
+    c:SetHandler("OnMouseDoubleClick", nil)
     c:SetHandler("OnMouseUp", function(_, mouseButton, inside)
         if mouseButton ~= MOUSE_BUTTON_INDEX_LEFT or not inside then return end
         clearItemTooltip()
@@ -255,64 +249,124 @@ local function createSlot(key, parent, native, x, y)
 end
 
 function P.Show()
-    if not P.stationOpen or IsInGamepadPreferredMode() then return end
-    P.visible = true
-    P.root:SetHidden(false)
-    P.root:BringWindowToTop()
-    P.silhouette:SetTexture(GetUnitSilhouetteTexture("player"))
-    P.Select(P.selected or "Chest")
+    if IsInGamepadPreferredMode() then return end
+    if P.inventoryScene and P.inventoryScene:IsShowing() then
+        P.inventoryTabs:SelectFragment(P.tabId)
+    elseif P.stationOpen then
+        CRAFT_ADVISOR_WINDOW.tabs:SelectFragment(P.tabId)
+    end
 end
 
-function P.Hide()
+local function hidePlanner()
     P.visible, P.dragging, P.pressed = false, nil, nil
     if P.root then P.root:SetHidden(true) end
     ClearTooltip(InformationTooltip)
     clearItemTooltip()
 end
 
-function P.CreateUI()
-    local launcher = W:CreateTopLevelWindow("OneCraftEquipmentLauncher")
-    launcher:SetDimensions(51, 51)
-    launcher:SetDrawTier(DT_HIGH)
-    P.stationButton = W:CreateControl("OneCraftEquipmentLauncherButton", launcher, CT_BUTTON)
-    P.stationButton:SetAnchorFill()
-    local texture = "EsoUI/Art/Crafting/smithing_tabIcon_creation_"
-    P.stationButton:SetNormalTexture(texture .. "up.dds")
-    P.stationButton:SetPressedTexture(texture .. "down.dds")
-    P.stationButton:SetMouseOverTexture(texture .. "over.dds")
-    P.stationButton:SetHandler("OnClicked", P.Show)
-    hint(P.stationButton, function() return "OneCraft — " .. P.words.title end, true)
-    P.stationButton:SetHidden(true)
-    local advisor = CRAFT_ADVISOR_WINDOW
-    local function positionLauncher()
-        local equip = ZO_MenuBar_GetButtonControl(advisor.tabBar, SI_CHARACTER_EQUIP_TITLE)
-        if not equip then return end
-        -- The native bar lays out right to left. Reserve one icon between tabs.
-        if not P.launcherPadding then
-            P.launcherPadding = (advisor.equipmentData.previousButtonExtraPadding or 0) - 66
+function P.Hide()
+    if P.visible then
+        if P.inventoryScene and P.inventoryScene:IsShowing() then
+            P.inventoryTabs:SelectFragment(SI_CHARACTER_EQUIP_TITLE)
+        elseif P.stationOpen and not IsInGamepadPreferredMode() then
+            CRAFT_ADVISOR_WINDOW.tabs:SelectFragment(SI_CHARACTER_EQUIP_TITLE)
         end
-        advisor.equipmentData.previousButtonExtraPadding = P.launcherPadding
-        ZO_MenuBar_UpdateButtons(advisor.tabBar)
-        launcher:ClearAnchors()
-        launcher:SetAnchor(LEFT, equip, RIGHT, 15, 0)
     end
-    ZO_PostHook(advisor, "OnShowing", positionLauncher)
-    positionLauncher()
+    hidePlanner()
+end
+
+function P.RefreshStationTab()
+    if CRAFT_ADVISOR_WINDOW then
+        local bar = CRAFT_ADVISOR_WINDOW.tabBar
+        -- ESO lays this bar out right to left. Keep existing button controls
+        -- and other addons' tabs intact; move only our entry after the writ.
+        local buttons = bar.m_object and bar.m_object.m_buttons
+        if buttons then
+            local plannerIndex, writIndex
+            for i, entry in ipairs(buttons) do
+                if entry[3] == P.tabId then plannerIndex = i end
+                if entry[3] == SI_CRAFT_ADVISOR_WRITS_TITLE then writIndex = i end
+            end
+            if plannerIndex and writIndex and plannerIndex ~= writIndex + 1 then
+                local planner = table.remove(buttons, plannerIndex)
+                if plannerIndex < writIndex then writIndex = writIndex - 1 end
+                table.insert(buttons, writIndex + 1, planner)
+            end
+        end
+        ZO_MenuBar_UpdateButtons(bar)
+    end
+    if P.stationButton then
+        P.stationButton:SetHidden(not P.stationOpen or IsInGamepadPreferredMode())
+    end
+end
+
+function P.CreateInventoryTabs()
+    local scene = SCENE_MANAGER:GetScene("inventory")
+    P.inventoryScene = scene
+    local bar = W:CreateTopLevelWindow("OneCraftEquipmentInventoryTabs")
+    bar:SetAnchor(TOPLEFT, ZO_Character, TOPLEFT, 10, 0)
+    bar:SetDimensions(220, 51)
+    bar:SetHidden(true)
+    -- Native character windows can move above ordinary top-level controls.
+    -- Keep this bar above both dolls, including after hover/click changes.
+    bar:SetDrawTier(DT_HIGH)
+    bar:SetDrawLevel(1)
+    local menu = W:CreateControlFromVirtual("OneCraftEquipmentInventoryMenu", bar, "ZO_MenuBarTemplate")
+    menu:SetAnchor(TOPLEFT, bar, TOPLEFT, 0, 0)
+    local title = W:CreateControl("OneCraftEquipmentInventoryMenuLabel", menu, CT_LABEL)
+    title:SetExcludeFromResizeToFitExtents(true)
+    title:SetAnchor(LEFT, menu, RIGHT, 15, 0)
+    title:SetFont("ZoFontHeader3")
+    title:SetDrawTier(DT_HIGH)
+    title:SetDrawLevel(10)
+    title:SetMouseEnabled(false)
+    ZO_MenuBar_SetData(menu, {
+        buttonTemplate = "ZO_MenuBarTooltipButton", normalSize = 51, downSize = 64,
+        buttonPadding = 15, animationDuration = 180,
+    })
+    local tabs = ZO_SceneFragmentBar:New(menu)
+    P.inventoryTabs = tabs
+    local function tabData(texture)
+        return {normal = texture .. "up.dds", pressed = texture .. "down.dds",
+            highlight = texture .. "over.dds", disabled = texture .. "disabled.dds",
+            alwaysShowTooltip = true}
+    end
+    -- The inventory scene normally owns these fragments directly. Move its
+    -- equipment content into a tab group; the bar replaces the old header.
+    scene:RemoveFragment(CHARACTER_WINDOW_FRAGMENT)
+    scene:RemoveFragment(CHARACTER_WINDOW_HEADER_FRAGMENT)
+    scene:RemoveFragment(CHARACTER_WINDOW_STATS_FRAGMENT)
+    tabs:Add(SI_CHARACTER_EQUIP_TITLE, {CHARACTER_WINDOW_FRAGMENT, CHARACTER_WINDOW_STATS_FRAGMENT},
+        tabData("EsoUI/Art/WritAdvisor/advisor_tabIcon_equip_"))
+    tabs:Add(P.tabId, {P.fragment}, tabData("EsoUI/Art/Crafting/smithing_tabIcon_creation_"))
+    P.inventoryEquipmentButton = ZO_MenuBar_GetButtonControl(menu, SI_CHARACTER_EQUIP_TITLE)
+    P.inventoryPlannerButton = ZO_MenuBar_GetButtonControl(menu, P.tabId)
+    scene:AddFragment(ZO_SimpleSceneFragment:New(bar))
+    scene:RegisterCallback("StateChange", function(_, state)
+        if state == SCENE_SHOWING then
+            bar:BringWindowToTop()
+            tabs:SelectFragment(SI_CHARACTER_EQUIP_TITLE)
+        elseif state == SCENE_HIDING then
+            tabs:Clear()
+            hidePlanner()
+        end
+    end)
+    if scene:IsShowing() then tabs:SelectFragment(SI_CHARACTER_EQUIP_TITLE) end
+end
+
+function P.CreateUI()
     local root = W:CreateTopLevelWindow("OneCraftEquipmentPlanner")
     P.root = root
-    root:SetAnchorFill(GuiRoot)
+    -- Start below the native tab bar and cover only the planner's content.
+    root:SetAnchor(TOPLEFT, ZO_Character, TOPLEFT, 0, 70)
+    root:SetDimensions(1050, 667)
     root:SetDrawTier(DT_HIGH)
     root:SetMouseEnabled(true)
     root:SetHidden(true)
-    local backdrop = W:CreateControlFromVirtual("OneCraftEquipmentPlannerBackdrop", root, "ZO_DefaultBackdrop")
-    backdrop:SetAnchorFill()
-    backdrop:SetCenterColor(0.02, 0.02, 0.025, 0.97)
     local origin = W:CreateControl(nil, root, CT_CONTROL)
     -- All doll parts remain at exactly the keyboard character sheet positions.
     origin:SetAnchor(TOPLEFT, ZO_Character, TOPLEFT, 0, 0)
-    origin:SetDimensions(1050, 680)
-    label(origin, "OneCraft — " .. P.words.title, 10, 35, 780, "ZoFontWinH2")
-    button(origin, P.words.close, 890, 35, 150, P.Hide)
+    origin:SetDimensions(1050, 737)
     P.silhouette = W:CreateControl(nil, root, CT_TEXTURE)
     P.silhouette:SetAnchor(TOPLEFT, ZO_CharacterPaperDoll, TOPLEFT, 0, 0)
     P.silhouette:SetDimensions(64, 256)
@@ -320,20 +374,67 @@ function P.CreateUI()
     for _, key in ipairs(P.slotOrder) do
         if not P.slots[key].extra then createSlot(key, root, _G["ZO_CharacterEquipmentSlots" .. key]) end
     end
-    label(origin, GetString("SI_EQUIPSLOTVISUALCATEGORY", EQUIP_SLOT_VISUAL_CATEGORY_ACCESSORIES), 10, 314, 220, "ZoFontHeader")
-    label(origin, GetString("SI_EQUIPSLOTVISUALCATEGORY", EQUIP_SLOT_VISUAL_CATEGORY_WEAPONS), 10, 400, 220, "ZoFontHeader")
-    label(origin, P.words.extras, 10, 535, 650, "ZoFontWinH3")
+    local function divider(name, y, text)
+        local c = W:CreateControlFromVirtual(name, origin, "ZO_CharacterSheetDivider")
+        c:SetAnchor(TOPLEFT, origin, TOPLEFT, 0, y)
+        c:GetNamedChild("Text"):SetText(text)
+    end
+    local apparelDivider = W:CreateControl(nil, origin, CT_TEXTURE)
+    apparelDivider:SetAnchor(TOPLEFT, origin, TOPLEFT, 0, 63)
+    apparelDivider:SetDimensions(256, 4)
+    apparelDivider:SetTexture("EsoUI/Art/CharacterWindow/characterWindow_leftSide_divider.dds")
+    local apparel = label(origin, "", 14, 72, 220, "ZoFontHeader")
+    apparel:SetModifyTextType(MODIFY_TEXT_TYPE_UPPERCASE)
+    P.apparelLabel = apparel
+    divider("OneCraftEquipmentAccessoriesSection", 314, GetString("SI_EQUIPSLOTVISUALCATEGORY", EQUIP_SLOT_VISUAL_CATEGORY_ACCESSORIES))
+    divider("OneCraftEquipmentWeaponsSection", 400, GetString("SI_EQUIPSLOTVISUALCATEGORY", EQUIP_SLOT_VISUAL_CATEGORY_WEAPONS))
+    divider("OneCraftEquipmentExtrasSection", 535, P.words.extras)
+    -- Keep the native non-craftable slots in their normal positions.
+    P.decorations = {}
+    for _, data in ipairs({{"Costume", EQUIP_SLOT_COSTUME}, {"Poison", EQUIP_SLOT_POISON}, {"BackupPoison", EQUIP_SLOT_BACKUP_POISON}}) do
+        local native = _G["ZO_CharacterEquipmentSlots" .. data[1]]
+        local c = W:CreateControlFromVirtual("OneCraftEquipmentDecoration" .. data[1], root,
+            data[1] == "Costume" and "ZO_InventoryEquippedSlot" or "ZO_InventoryWeaponSlot")
+        c:SetAnchor(TOPLEFT, native, TOPLEFT, 0, 0)
+        c:GetNamedChild("Icon"):SetTexture(ZO_Character_GetEmptyEquipSlotTexture(data[2]))
+        c:SetMouseEnabled(false)
+        P.decorations[data[1]] = c
+    end
+    local swap = W:CreateControlFromVirtual("OneCraftEquipmentWeaponSwap", root, "ZO_WeaponSwapLeft")
+    swap:SetAnchor(TOPLEFT, ZO_CharacterWeaponSwap, TOPLEFT, 0, 0)
+    swap:SetHandler("OnMouseDown", nil)
+    swap:SetHandler("OnClicked", nil)
+    swap:SetMouseEnabled(false)
     local extras = W:CreateControl(nil, origin, CT_CONTROL)
-    extras:SetAnchor(TOPLEFT, origin, TOPLEFT, 10, 580)
-    extras:SetDimensions(650, 50)
-    for i = 1, P.extraCount do createSlot("extra" .. i, extras, nil, (i - 1) * 64, 0) end
-    label(origin, P.words.move, 10, 638, 660, "ZoFontGameSmall")
+    extras:SetAnchor(TOPLEFT, origin, TOPLEFT, 10, 566)
+    extras:SetDimensions(228, 94)
+    for i = 1, P.extraCount do createSlot("extra" .. i, extras, nil, ((i - 1) % 5) * 46, math.floor((i - 1) / 5) * 50) end
+    local panel = W:CreateControl("OneCraftEquipmentEditorPanel", origin, CT_CONTROL)
+    panel:SetAnchor(TOPLEFT, origin, TOPLEFT, 242, 78)
+    panel:SetDimensions(810, 658)
+    -- Use ESO's side-panel background with soft falloff, not a tooltip frame.
+    local background = W:CreateControlFromVirtual("OneCraftEquipmentEditorBackground", panel, "ZO_PanelBackground")
+    -- Match the doll's actual background texture, including the panel's
+    -- 64px top/bottom falloff and its 16px left inset.
+    local dollBackground = ZO_SharedThinLeftPanelBackground:GetNamedChild("Left")
+    background:ClearAnchors()
+    background:SetAnchor(TOPLEFT, dollBackground, TOPRIGHT, 16, 64)
+    background:SetAnchor(BOTTOMRIGHT, dollBackground, BOTTOMRIGHT, 810, -64)
+    background:SetDrawLayer(DL_BACKGROUND)
+    background:SetAlpha(0.8)
+    local function panelDivider(name, x, y, width)
+        local c = W:CreateControlFromVirtual(name, panel, "ZO_DynamicHorizontalDivider")
+        c:SetAnchor(TOPLEFT, panel, TOPLEFT, x, y)
+        c:SetWidth(width)
+    end
     P.fields, P.combos = {"set", "type", "level", "style", "trait", "enchant", "quality"}, {}
-    local editor = W:CreateControl(nil, origin, CT_CONTROL)
-    editor:SetAnchor(TOPLEFT, origin, TOPLEFT, 250, 92)
-    editor:SetDimensions(410, 435)
+    local editor = W:CreateControl(nil, panel, CT_CONTROL)
+    editor:SetAnchor(TOPLEFT, panel, TOPLEFT, 8, 14)
+    editor:SetDimensions(410, 466)
     for i, field in ipairs(P.fields) do
-        label(editor, P.words[field], 0, (i - 1) * 52, 130, "ZoFontGameSmall")
+        local fieldLabel = label(editor, P.words[field], 0, (i - 1) * 52 + 4, 130, "ZoFontHeader")
+        fieldLabel:SetModifyTextType(MODIFY_TEXT_TYPE_UPPERCASE)
+        panelDivider("OneCraftEquipmentDivider" .. field, 8, 58 + (i - 1) * 52, 405)
         local control = W:CreateControlFromVirtual("OneCraftEquipmentField" .. field, editor, "ZO_ComboBox")
         control:SetAnchor(TOPLEFT, editor, TOPLEFT, 130, (i - 1) * 52)
         control:SetDimensions(275, 32)
@@ -346,24 +447,72 @@ function P.CreateUI()
             control:SetHandler("OnMouseExit", function() clearItemTooltip(); ClearTooltip(InformationTooltip) end)
         end
     end
-    label(editor, P.words.sameSet, 0, 363, 410, "ZoFontGameSmall")
-    button(editor, P.words.apply, 0, 399, 250, function() report(P.Apply(P.selected, P.draft)) end)
-    button(editor, P.words.remove, 260, 399, 145, function()
+    button(editor, P.words.apply, 0, 434, 195, function() report(P.Apply(P.selected, P.draft)) end)
+    button(editor, P.words.remove, 210, 434, 195, function()
         P.saved.items[P.selected] = nil
         P.Select(P.selected)
     end)
-    label(origin, P.words.materials, 700, 94, 340, "ZoFontWinH3")
-    local scroll = W:CreateControlFromVirtual("OneCraftEquipmentMaterials", origin, "ZO_ScrollContainer")
-    scroll:SetAnchor(TOPLEFT, origin, TOPLEFT, 700, 134)
+    local materialHeader = label(panel, P.words.materials, 458, 16, 340, "ZoFontWinH3")
+    materialHeader:SetModifyTextType(MODIFY_TEXT_TYPE_UPPERCASE)
+    panelDivider("OneCraftEquipmentMaterialsDivider", 458, 50, 340)
+    panelDivider("OneCraftEquipmentActionsDivider", 8, 432, 790)
+    local scroll = W:CreateControlFromVirtual("OneCraftEquipmentMaterials", panel, "ZO_ScrollContainer")
+    scroll:SetAnchor(TOPLEFT, panel, TOPLEFT, 458, 64)
     scroll:SetDimensions(340, 335)
     P.materialChild = scroll:GetNamedChild("ScrollChild")
     P.materialChild:SetWidth(320)
-    P.queueLabel = label(origin, "", 700, 482, 340, "ZoFontWinH3")
-    P.submitButton = button(origin, P.words.submit, 700, 526, 340, function() report(P.Submit()) end)
-    P.cancelButton = button(origin, P.words.cancel, 700, 569, 340, function() report(P.Cancel()) end)
-    P.clearButton = button(origin, P.words.clear, 700, 612, 340, function() report(P.ClearAll()) end)
-    P.statusLabel = label(origin, "", 700, 652, 340, "ZoFontGameSmall")
+    P.queueLabel = label(panel, "", 458, 404, 340, "ZoFontWinH3")
+    P.submitButton = button(panel, P.words.submit, 458, 448, 340, function() report(P.Submit()) end)
+    P.cancelButton = button(panel, P.words.cancel, 458, 491, 340, function() report(P.Cancel()) end)
+    P.clearButton = button(panel, P.words.clear, 458, 534, 340, function() report(P.ClearAll()) end)
+    P.statusLabel = label(panel, "", 458, 574, 340, "ZoFontGame")
     P.statusLabel:SetHeight(85)
+
+    -- The native fragment bar removes the equipped/writ fragment group when
+    -- selecting this tab, and restores it when selecting another section.
+    local advisor = CRAFT_ADVISOR_WINDOW
+    -- A child's tier cannot lift it above another top-level window. Raise
+    -- the advisor window itself above the planner's foreground/background.
+    advisor.control:SetDrawTier(DT_HIGH)
+    advisor.control:SetDrawLevel(2)
+    local tabTitle = advisor.tabBar:GetNamedChild("Label")
+    tabTitle:SetDrawTier(DT_HIGH)
+    tabTitle:SetDrawLevel(10)
+    ZO_CreateStringId("SI_ONECRAFT_EQUIPMENT_PLANNER", "OneCraft — " .. P.words.title)
+    P.tabId = SI_ONECRAFT_EQUIPMENT_PLANNER
+    P.fragment = ZO_SimpleSceneFragment:New(root)
+    P.fragment:RegisterCallback("StateChange", function(_, state)
+        if state == SCENE_FRAGMENT_SHOWING then
+            P.visible = true
+            P.silhouette:SetTexture(GetUnitSilhouetteTexture("player"))
+            local apparelText = IsEquipSlotVisualCategoryHidden(EQUIP_SLOT_VISUAL_CATEGORY_APPAREL, GAMEPLAY_ACTOR_CATEGORY_PLAYER)
+                and GetString(SI_CHARACTER_EQUIP_APPAREL_HIDDEN)
+                or GetString("SI_EQUIPSLOTVISUALCATEGORY", EQUIP_SLOT_VISUAL_CATEGORY_APPAREL)
+            P.apparelLabel:SetText(apparelText)
+            P.Select(P.selected or "Chest")
+        elseif state == SCENE_FRAGMENT_HIDING or state == SCENE_FRAGMENT_HIDDEN then
+            hidePlanner()
+        end
+    end)
+    local layoutEquipment = advisor.equipmentData.existingCallback or advisor.equipmentData.callback
+    local texture = "EsoUI/Art/Crafting/smithing_tabIcon_creation_"
+    advisor.tabs:Add(P.tabId, {P.fragment, THIN_LEFT_PANEL_BG_FRAGMENT}, {
+        normal = texture .. "up.dds", pressed = texture .. "down.dds",
+        highlight = texture .. "over.dds", disabled = texture .. "disabled.dds",
+        -- The advisor already belongs to crafting scenes. Its layout can run
+        -- before the station-interact event updates our stationOpen flag.
+        visible = function() return not IsInGamepadPreferredMode() end,
+        alwaysShowTooltip = true,
+        CustomTooltipFunction = function(tooltip)
+            InitializeTooltip(tooltip, P.stationButton, BOTTOM, 0, -8, TOP)
+            SetTooltipText(tooltip, GetString(P.tabId))
+        end,
+        callback = layoutEquipment,
+    })
+    P.stationButton = ZO_MenuBar_GetButtonControl(advisor.tabBar, P.tabId)
+    ZO_PostHook(advisor, "OnShowing", P.RefreshStationTab)
+    ZO_PostHook(advisor, "OnHidden", hidePlanner)
+    P.CreateInventoryTabs()
     EVENT_MANAGER:RegisterForEvent("OneCraftEquipmentDrop", EVENT_GLOBAL_MOUSE_UP, function(_, mouseButton)
         if mouseButton ~= MOUSE_BUTTON_INDEX_LEFT or not P.visible then return end
         local source = P.dragging

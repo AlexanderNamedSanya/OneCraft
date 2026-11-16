@@ -30,14 +30,24 @@ local jewelry = {
 
 function E.NextOrder() E.order = E.order + 1; return E.order end
 function E.Sets()
-    if E.sets then return E.sets end
-    local result = {[0] = {P.words.none}}
-    for i = 1, GetNumConsolidatedSmithingSets() do
-        local id = GetConsolidatedSmithingItemSetIdByIndex(i)
-        if id and id > 0 then result[id] = {GetItemSetName(id), consolidatedIndex = i} end
+    if not E.sets then
+        E.sets = {[0] = {P.words.none}}
+        -- The consolidated-station list can be empty away from a station.
+        -- Our existing crafted-item catalogue supplies the global set IDs.
+        for id in pairs(P.itemRanges) do
+            if id > 0 then E.sets[id] = {GetItemSetName(id)} end
+        end
     end
-    E.sets = result
-    return result
+    local count = GetNumConsolidatedSmithingSets()
+    if E.setCount ~= count then
+        for _, entry in pairs(E.sets) do entry.consolidatedIndex = nil end
+        for i = 1, count do
+            local id = GetConsolidatedSmithingItemSetIdByIndex(i)
+            if id and id > 0 then E.sets[id] = {GetItemSetName(id), consolidatedIndex = i} end
+        end
+        E.setCount = count
+    end
+    return E.sets
 end
 
 function Client.isSmithingLevelValid(cp, level)
@@ -136,7 +146,7 @@ function E.ResolvePattern(request)
     if request.setIndex ~= 0 then
         local entry = E.Sets()[request.setIndex]
         if GetCraftingInteractionMode() == CRAFTING_INTERACTION_MODE_CONSOLIDATED_STATION then
-            if not entry or not IsConsolidatedSmithingSetIndexUnlocked(entry.consolidatedIndex) then return end
+            if not entry or not entry.consolidatedIndex or not IsConsolidatedSmithingSetIndexUnlocked(entry.consolidatedIndex) then return end
             if GetActiveConsolidatedSmithingItemSetId() ~= request.setIndex then SetActiveConsolidatedSmithingSetByIndex(entry.consolidatedIndex) end
         elseif not CanSpecificSmithingItemSetPatternBeCraftedHere(request.setIndex) then return end
     end

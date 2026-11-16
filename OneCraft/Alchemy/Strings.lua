@@ -23,7 +23,7 @@ local ru = {
     potion = "Зелье", poison = "Яд", noDescription = "Игра не предоставила описание этого эффекта.",
     alternativeUnavailable = "Этот вариант больше недоступен. Предыдущий рецепт сохранён.",
 }
-A.text = GetCVar("language.2") == "ru" and ru or en
+A.text = OneCraft.Localize(GetCVar("language.2") == "ru" and ru or en)
 
 -- Fallback names only. Known trait names and icons come from the game.
 A.effectNames = {

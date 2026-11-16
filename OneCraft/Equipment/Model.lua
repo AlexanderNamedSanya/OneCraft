@@ -1,7 +1,7 @@
 local O = OneCraft
 local P = {types = {}, slots = {}, slotOrder = {}, extraCount = 10}
 O.Equipment = P
-local function text(ru, en) return O.isRussian and ru or en end
+local function text(ru, en) return O.isRussian and ru or O.Translate(en) end
 P.Text = text
 P.words = {
     title = text("Конструктор снаряжения", "Equipment planner"),

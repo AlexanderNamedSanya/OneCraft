@@ -16,5 +16,5 @@ OneCraft brings smithing-style alchemy and enchanting selectors and an equipment
 - Browse alternative alchemy recipes, sorted by how many times each can be crafted from available materials.
 - Enchanting: equipment type, level, effect, and quality, with automatic rune selection.
 - Native horizontal selectors, result preview, quantity control, and Create action.
-- Plan equipment on a character doll with ten extra slots, item previews, set bonuses, and material totals that highlight shortages.
+- Plan equipment from your inventory or a crafting station, with ten extra slots, item previews, set bonuses, and material totals that highlight shortages.
 - Queue equipment creation, guaranteed improvements, and glyph application across the required crafting stations. Plans and crafting progress are saved between sessions.

@@ -139,7 +139,7 @@ end
 function A.BuildEffectMetadata()
     local languageIndex = GetCVar("language.2") == "ru" and 2 or 1
     for key, names in pairs(A.effectNames) do
-        A.effects[key] = {key = key, name = names[languageIndex],
+        A.effects[key] = {key = key, name = OneCraft.Translate(names[languageIndex]),
             positive = positiveEffects[key] == true, priority = popularEffects[key] or math.huge,
             icon = "EsoUI/Art/Icons/Alchemy/" .. A.effectIconFiles[key]}
     end

@@ -28,7 +28,7 @@ local ru = {
     predicted = "Предполагаемый результат", material = "Необходимые руны", noDescription = "Выберите необходимые руны, чтобы увидеть игровое описание глифа.",
 }
 A.isRussian = GetCVar("language.2") == "ru"
-A.text = A.isRussian and ru or en
+A.text = OneCraft.Localize(A.isRussian and ru or en)
 A.effectNames = {
     health = {"Health", "Здоровье"}, magicka = {"Magicka", "Магия"}, stamina = {"Stamina", "Запас сил"},
     absorbHealth = {"Absorb Health", "Поглощение здоровья"}, absorbMagicka = {"Absorb Magicka", "Поглощение магии"},

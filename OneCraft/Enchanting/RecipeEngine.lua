@@ -17,7 +17,7 @@ end
 
 function E.EffectName(effect)
     local names = A.effectNames[effect.key]
-    return names[A.isRussian and 2 or 1]
+    return OneCraft.Translate(names[A.isRussian and 2 or 1])
 end
 
 function E.EquipmentType(key)

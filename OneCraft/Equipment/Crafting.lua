@@ -145,24 +145,24 @@ function P.Initialize()
     local EM = EVENT_MANAGER
     EM:RegisterForEvent("OneCraftEquipmentStation", EVENT_CRAFTING_STATION_INTERACT, function()
         P.stationOpen = true
-        P.stationButton:SetHidden(IsInGamepadPreferredMode())
+        P.RefreshStationTab()
         P.status = nil
         for _, list in ipairs(P.client.personalQueue) do for _, request in ipairs(list) do request.failed = nil end end
         zo_callLater(P.Engine.Run, 150)
     end)
     EM:RegisterForEvent("OneCraftEquipmentEnd", EVENT_END_CRAFTING_STATION_INTERACT, function()
         P.stationOpen = false
-        P.stationButton:SetHidden(true)
+        P.RefreshStationTab()
         P.Hide()
         P.SaveQueue()
     end)
     EM:RegisterForEvent("OneCraftEquipmentMode", EVENT_GAMEPAD_PREFERRED_MODE_CHANGED, function()
-        P.stationButton:SetHidden(not P.stationOpen or IsInGamepadPreferredMode())
+        P.RefreshStationTab()
         if IsInGamepadPreferredMode() then P.Hide() end
     end)
     -- A UI reload can initialize us after the station interaction event.
     P.stationOpen = GetCraftingInteractionType() ~= CRAFTING_TYPE_INVALID
-    P.stationButton:SetHidden(not P.stationOpen or IsInGamepadPreferredMode())
+    P.RefreshStationTab()
     EM:RegisterForEvent("OneCraftEquipmentSave", EVENT_PLAYER_DEACTIVATED, P.SaveQueue)
     -- Refresh totals after changes, coalesced to one update per inventory burst.
     local function refresh()
