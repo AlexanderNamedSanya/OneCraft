@@ -1,6 +1,14 @@
-# OneCraft
+AI disclosure: Code and translations were generated with OpenAI Codex.
 
-Developed with AI assistance.
+**Dependencies**
+
+Required: [LibAddonMenu-2.0](https://www.esoui.com/downloads/info7-LibAddonMenu.html) r43 or newer. Install separately.
+
+**Credits**
+
+By oneDOK. Thanks to the ESO UI, LibAddonMenu, LibAlchemy, Potion Maker, and LibLazyCrafting authors and contributors. Detailed credits are included in `OneCraft/Credits.txt`.
+
+**About OneCraft**
 
 OneCraft brings smithing-style alchemy and enchanting selectors and an equipment planner to The Elder Scrolls Online.
 
@@ -10,7 +18,3 @@ OneCraft brings smithing-style alchemy and enchanting selectors and an equipment
 - Native horizontal selectors, result preview, quantity control, and Create action.
 - Plan equipment on a character doll with ten extra slots, item previews, set bonuses, and material totals that highlight shortages.
 - Queue equipment creation, guaranteed improvements, and glyph application across the required crafting stations. Plans and crafting progress are saved between sessions.
-
-Dependency: [LibAddonMenu-2.0](https://www.esoui.com/downloads/info7-LibAddonMenu.html), r43 or newer.
-
-By oneDOK. Thanks to the ESO UI, LibAlchemy, Potion Maker, and LibLazyCrafting authors and contributors for reference material. Detailed credits are in `OneCraft/Credits.txt`.
